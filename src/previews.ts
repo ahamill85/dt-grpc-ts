@@ -55,8 +55,15 @@ export async function decodePreview(
 
   const offset = 68;
 
-  const f16a = new Float16Array(preview.buffer, offset);
-  const u8c = new Uint8ClampedArray((preview.length / 2 / 4) * 3);
+  // Preview frames streamed mid-sampling can be truncated relative to the header's
+  // declared width/height, so clamp to what's actually available instead of trusting it.
+  const availableBytes = preview.byteLength - offset
+  const declaredFloats = width * height * channels
+  const availableFloats = Math.max(0, Math.floor(availableBytes / 2))
+  const floatCount = Math.min(declaredFloats, availableFloats - (availableFloats % 4))
+
+  const f16a = new Float16Array(preview.buffer, preview.byteOffset + offset, floatCount)
+  const u8c = new Uint8ClampedArray(width * height * 3)
 
   for (let i = 0; i < f16a.length / 4; i++) {
     [u8c[i * 3], u8c[i * 3 + 1], u8c[i * 3 + 2]] = decoders[version](
