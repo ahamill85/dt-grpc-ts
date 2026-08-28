@@ -22,6 +22,17 @@ decoders['v1'] =
       return [r, g, b]
     }
 
+// SDXL latent -> RGB projection. Coefficients are ComfyUI's `latent_formats.SDXL`
+// factors/bias (comfy/latent_formats.py), scaled by 255 to match this module's convention.
+decoders['sdxl_base_v0.9'] =
+  (v0, v1, v2, v3) => {
+    const r = 93.0955 * v0 - 64.5915 * v1 + 27.438 * v2 - 80.7075 * v3 + 27.642
+    const g = 107.916 * v0 - 1.071 * v1 + 28.3305 * v2 - 63.546 * v3 - 4.4625
+    const b = 110.6955 * v0 + 27.234 * v1 - 9.231 * v2 - 55.794 * v3 - 0.2805
+
+    return [r, g, b]
+  }
+
 /**
  * Decodes a preview image returned by the gRPC API.
  * The API returns a width * height * 4 array of float16 values.
