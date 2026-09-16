@@ -1,5 +1,6 @@
 import { Float16Array } from '@petamoriken/float16';
 import { convertResponseImage } from './imageHelpers';
+import { decompress } from './fpzip/decompress';
 import { BufferWithInfo } from './imageBuffer';
 
 const decoders: {
@@ -57,22 +58,33 @@ export async function decodePreview(
 
   const offset = 68;
 
-  // Preview frames streamed mid-sampling can be truncated relative to the header's
-  // declared width/height, so clamp to what's actually available instead of trusting it.
-  const availableBytes = preview.byteLength - offset
-  const declaredFloats = width * height * channels
-  const availableFloats = Math.max(0, Math.floor(availableBytes / 2))
-  const floatCount = Math.min(declaredFloats, availableFloats - (availableFloats % 4))
+  // The server can FPZIP-compress the preview payload -- same magic number
+  // convertResponseImage already checks for final images. Reading compressed bytes as raw
+  // float16 without decompressing first produces effectively random values (full-frame static),
+  // since the compressed stream doesn't happen to fail loudly, it just decodes as garbage.
+  const isCompressed = intBuffer[0] === 1012247;
 
-  const f16a = new Float16Array(preview.buffer, preview.byteOffset + offset, floatCount)
+  let floats: { length: number; [index: number]: number };
+  if (isCompressed) {
+    floats = await decompress(preview.slice(offset));
+  } else {
+    // Preview frames streamed mid-sampling can be truncated relative to the header's
+    // declared width/height, so clamp to what's actually available instead of trusting it.
+    const availableBytes = preview.byteLength - offset
+    const declaredFloats = width * height * channels
+    const availableFloats = Math.max(0, Math.floor(availableBytes / 2))
+    const floatCount = Math.min(declaredFloats, availableFloats - (availableFloats % 4))
+    floats = new Float16Array(preview.buffer, preview.byteOffset + offset, floatCount)
+  }
+
   const u8c = new Uint8ClampedArray(width * height * 3)
 
-  for (let i = 0; i < f16a.length / 4; i++) {
+  for (let i = 0; i < floats.length / 4; i++) {
     [u8c[i * 3], u8c[i * 3 + 1], u8c[i * 3 + 2]] = decoders[version](
-      f16a[i * 4],
-      f16a[i * 4 + 1],
-      f16a[i * 4 + 2],
-      f16a[i * 4 + 3]
+      floats[i * 4],
+      floats[i * 4 + 1],
+      floats[i * 4 + 2],
+      floats[i * 4 + 3]
     );
   }
 
