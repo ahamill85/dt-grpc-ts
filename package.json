@@ -30,6 +30,7 @@
     "test": "vitest run",
     "test:watch": "vitest --watch --ui",
     "gen-code": "node scripts/genCode.mjs",
+    "prepare": "tsup",
     "prepublishOnly": "npm run build",
     "example": "tsx examples/index.ts"
   },
